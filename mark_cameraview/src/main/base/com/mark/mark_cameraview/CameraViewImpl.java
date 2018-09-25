@@ -1,0 +1,124 @@
+/*
+ * Copyright (C) 2016 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.mark.mark_cameraview;
+
+import android.content.Context;
+import android.view.OrientationEventListener;
+import android.view.View;
+
+import java.io.File;
+import java.util.Set;
+
+abstract class CameraViewImpl {
+
+    protected final Callback mCallback;
+
+    protected final PreviewImpl mPreview;
+    protected int degrees;
+    protected boolean isStart;
+    protected final MyOrientationDetector mOrientationDetector;
+
+    CameraViewImpl(Callback callback, PreviewImpl preview) {
+        mCallback = callback;
+        mPreview = preview;
+        mOrientationDetector = new MyOrientationDetector(getView().getContext());
+    }
+
+    View getView() {
+        return mPreview.getView();
+    }
+
+    public int getDegrees() {
+        return degrees;
+    }
+
+    /**
+     * @return {@code true} if the implementation was able to start the camera session.
+     */
+    abstract boolean start();
+
+    abstract void stop();
+
+    abstract boolean isCameraOpened();
+
+    abstract void setFacing(int facing);
+
+    abstract int getFacing();
+
+    abstract Set<AspectRatio> getSupportedAspectRatios();
+
+    /**
+     * @return {@code true} if the aspect ratio was changed.
+     */
+    abstract boolean setAspectRatio(AspectRatio ratio);
+
+    abstract AspectRatio getAspectRatio();
+
+    abstract void setAutoFocus(boolean autoFocus);
+
+    abstract boolean getAutoFocus();
+
+    abstract void setFlash(int flash);
+
+    abstract int getFlash();
+
+    abstract void takePicture();
+
+    abstract void startRecord(File recordFile);
+
+    abstract void stopRecord();
+
+    abstract void setDisplayOrientation(int displayOrientation);
+
+    interface Callback {
+
+        void onCameraOpened();
+
+        void onCameraClosed();
+
+        void onPictureTaken(Object data);
+
+    }
+
+    public class MyOrientationDetector extends OrientationEventListener {
+
+        public MyOrientationDetector(Context context) {
+            super(context);
+        }
+
+        @Override
+        public void onOrientationChanged(int orientation) {
+            if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN || isStart) {
+                return;  //手机平放时，检测不到有效的角度
+            }
+            //只检测是否有四个角度的改变
+            if (orientation > 350 || orientation < 10) { //0度
+                degrees = 0;
+            } else if (orientation > 80 && orientation < 100) { //90度
+                degrees = 90;
+            } else if (orientation > 170 && orientation < 190) { //180度
+                degrees = 180;
+            } else if (orientation > 260 && orientation < 280) { //270度
+                degrees = 270;
+            } else {
+                return;
+            }
+        }
+
+    }
+
+}
