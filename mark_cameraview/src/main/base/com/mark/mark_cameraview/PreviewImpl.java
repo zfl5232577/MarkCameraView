@@ -17,12 +17,15 @@
 package com.mark.mark_cameraview;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.util.Log;
 import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.View;
+
+import java.io.File;
 
 
 /**
@@ -54,9 +57,17 @@ abstract class PreviewImpl {
 
     abstract boolean isReady();
 
+    abstract void playVideo(File recordFile);
+
+    abstract void stopVideo();
+
+    abstract boolean pauseVideo();
+
+    abstract boolean resumeVideo();
+
     abstract void updateVideoPreviewSizeCenter(int width, int height);
 
-    abstract void  updatePicturePreviewSizeCenter(int degrees);
+    abstract void updatePicturePreviewSizeCenter(int degrees);
 
     protected void dispatchSurfaceChanged() {
         mCallback.onSurfaceChanged();
@@ -74,7 +85,6 @@ abstract class PreviewImpl {
     }
 
     void setSize(int width, int height) {
-        Log.e("mark", this+"setSize: "+width+height );
         this.mWidth = width;
         this.mHeight = height;
     }

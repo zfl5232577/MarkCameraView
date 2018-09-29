@@ -56,12 +56,14 @@ public class CaptureButton extends View {
 
     private RectF rectF;
     private float progress = 0;
+    private boolean animating;
     private LongPressRunnable longPressRunnable = new LongPressRunnable();
     private RecordRunnable recordRunnable = new RecordRunnable();
     private ValueAnimator record_anim = ValueAnimator.ofFloat(0, 360);
     private CaptureListener mCaptureListener;
 
-    private boolean animating;
+    @RecordVideoView.Mode
+    private int mMode;
 
     public CaptureButton(Context context) {
         this(context, null);
@@ -77,6 +79,15 @@ public class CaptureButton extends View {
         mPaint = new Paint();
         mPaint.setAntiAlias(true);
         STATE_SELECTED = STATE_LESSNESS;
+    }
+
+    @RecordVideoView.Mode
+    public int getMode() {
+        return mMode;
+    }
+
+    public void setMode(@RecordVideoView.Mode int mode) {
+        mMode = mode;
     }
 
     @Override
@@ -122,6 +133,17 @@ public class CaptureButton extends View {
             canvas.drawCircle(btn_center_X, btn_center_Y, btn_outside_radius, mPaint);
             mPaint.setColor(Color.WHITE);
             canvas.drawCircle(btn_center_X, btn_center_Y, btn_inside_radius, mPaint);
+            mPaint.setTextSize(40);
+            mPaint.setTextAlign(Paint.Align.CENTER);
+            String desc = "";
+            if (mMode == RecordVideoView.TAKE_PHOTO) {
+                desc = "轻触拍照";
+            } else if (mMode == RecordVideoView.TAKE_RECORD) {
+                desc = "长按摄像";
+            } else {
+                desc = "轻触拍照,长按摄像";
+            }
+            canvas.drawText(desc, btn_center_X, 40, mPaint);
 
             //draw Progress bar
             Paint paintArc = new Paint();
@@ -216,12 +238,17 @@ public class CaptureButton extends View {
                             event.getPointerCount() == 1
                             ) {
 
-                        key_down_Y = event.getY();
-                        STATE_SELECTED = STATE_RECORD;
-                        if (mCaptureListener != null) {
-                            mCaptureListener.record();
+                        if (mMode == RecordVideoView.TAKE_PHOTO) {
+                            STATE_SELECTED = STATE_CAPTURED;
+                        } else {
+                            key_down_Y = event.getY();
+                            STATE_SELECTED = STATE_RECORD;
+                            if (mCaptureListener != null) {
+                                mCaptureListener.record();
+                            }
+                            Log.e(TAG, "onTouchEvent: 点击了" );
+                            postCheckForLongTouch();
                         }
-                        postCheckForLongTouch();
                     }
                 } else if (STATE_SELECTED == STATE_RECORD_BROWSE || STATE_SELECTED == STATE_PICTURE_BROWSE) {
                     if (event.getY() > btn_center_Y - btn_result_radius &&
@@ -247,7 +274,7 @@ public class CaptureButton extends View {
                             event.getX() < btn_right_X + btn_result_radius &&
                             event.getPointerCount() == 1
                             ) {
-                        if (STATE_SELECTED!= STATE_FINISH && mCaptureListener != null) {
+                        if (STATE_SELECTED != STATE_FINISH && mCaptureListener != null) {
                             if (STATE_SELECTED == STATE_RECORD_BROWSE) {
                                 mCaptureListener.getRecordResult();
                             } else if (STATE_SELECTED == STATE_PICTURE_BROWSE) {
@@ -283,25 +310,40 @@ public class CaptureButton extends View {
                     }
                 } else if (STATE_SELECTED == STATE_RECORD) {
                     Log.e(TAG, "onTouchEvent: " + record_anim.getCurrentPlayTime());
-                    Log.e(TAG, "capture: " );
                     if (record_anim.getCurrentPlayTime() < 800) {
-                        STATE_SELECTED = STATE_PICTURE_BROWSE;
+                        if (mMode == RecordVideoView.TAKE_RECORD) {
+                            Toast.makeText(mContext, "拍摄时间太短，请重新拍摄", Toast.LENGTH_SHORT).show();
+                            STATE_SELECTED = STATE_LESSNESS;
+                        } else {
+                            STATE_SELECTED = STATE_PICTURE_BROWSE;
+                            if (mCaptureListener != null) {
+                                mCaptureListener.capture();
+                            }
+                        }
                         if (record_anim.getCurrentPlayTime() == 0) {
                             removeCallbacks(recordRunnable);
                         }
-                        if (mCaptureListener != null) {
-                            mCaptureListener.capture();
+                        if (mCaptureListener != null){
+                            mCaptureListener.rencordFail();
                         }
                     } else {
                         STATE_SELECTED = STATE_RECORD_BROWSE;
                         if (mCaptureListener != null) {
-                            mCaptureListener.rencodEnd();
+                            mCaptureListener.rencordEnd();
                         }
                     }
                     record_anim.cancel();
                     progress = 0;
                     invalidate();
                     startAnimation(btn_outside_radius, btn_before_outside_radius, btn_inside_radius, btn_before_inside_radius);
+                    if (STATE_SELECTED == STATE_RECORD_BROWSE || STATE_SELECTED == STATE_PICTURE_BROWSE) {
+                        captureOrRecordSuccess();
+                    }
+                } else if (STATE_SELECTED == STATE_CAPTURED) {
+                    STATE_SELECTED = STATE_PICTURE_BROWSE;
+                    if (mCaptureListener != null) {
+                        mCaptureListener.capture();
+                    }
                     captureOrRecordSuccess();
                 }
                 break;
@@ -321,7 +363,7 @@ public class CaptureButton extends View {
         }
     }
 
-    private void captureOrRecordSuccess(){
+    private void captureOrRecordSuccess() {
         animating = true;
         postDelayed(new Runnable() {
             @Override
@@ -354,7 +396,7 @@ public class CaptureButton extends View {
                         startAnimation(btn_after_outside_radius, btn_before_outside_radius, btn_after_inside_radius, btn_before_inside_radius);
                         captureOrRecordSuccess();
                         if (mCaptureListener != null) {
-                            mCaptureListener.rencodEnd();
+                            mCaptureListener.rencordEnd();
                         }
                     }
                 }
@@ -382,7 +424,7 @@ public class CaptureButton extends View {
             public void onAnimationEnd(Animator animation) {
                 super.onAnimationEnd(animation);
                 if (STATE_SELECTED == STATE_RECORD) {
-                    postDelayed(recordRunnable, 100);
+                    postDelayed(recordRunnable, 200);
                 }
             }
         });
@@ -393,8 +435,8 @@ public class CaptureButton extends View {
                 invalidate();
             }
         });
-        outside_anim.setDuration(100);
-        inside_anim.setDuration(100);
+        outside_anim.setDuration(200);
+        inside_anim.setDuration(200);
         outside_anim.start();
         inside_anim.start();
     }
@@ -448,7 +490,9 @@ public class CaptureButton extends View {
 
         public void record();
 
-        public void rencodEnd();
+        public void rencordEnd();
+
+        public void rencordFail();
 
         public void getRecordResult();
 

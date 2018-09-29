@@ -17,7 +17,6 @@ package com.mark.mark_cameraview;
 
 import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
@@ -29,9 +28,6 @@ import android.view.SurfaceHolder;
 import android.view.TextureView;
 import android.widget.Toast;
 
-import com.mark.aoplibrary.annotation.TimeLog;
-
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -103,7 +99,9 @@ class Camera1 extends CameraViewImpl {
         degrees = 0;
         mOrientationDetector.enable();
         chooseCamera();
-        openCamera();
+        if (!openCamera()){
+            return false;
+        }
         if (mPreview.isReady()) {
             setUpPreview();
             mPreview.getView().postDelayed(new Runnable() {
@@ -111,7 +109,7 @@ class Camera1 extends CameraViewImpl {
                 public void run() {
                     mPreview.updateVideoPreviewSizeCenter(mPreview.getWidth(), mPreview.getHeight());
                 }
-            }, 200);
+            }, 300);
         }
         mShowingPreview = true;
         mCamera.startPreview();
@@ -259,13 +257,14 @@ class Camera1 extends CameraViewImpl {
         }
     }
 
-    @TimeLog
     @Override
     void startRecord(File recordFile) {
+        Log.e("mark", "startRecord: 开始录制");
         if (!isCameraOpened()) {
             return;
         }
         isStart = true;
+        mCamera.unlock();
         if (mMediaRecorder == null) {
             mMediaRecorder = new MediaRecorder();
         }
@@ -284,7 +283,7 @@ class Camera1 extends CameraViewImpl {
                 }
             }
         });
-        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);// 音频源
+        mMediaRecorder.setAudioSource(MediaRecorder.AudioSource.DEFAULT);// 音频源
         mMediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);// 视频源
         mMediaRecorder.setOutputFormat(mProfile.fileFormat);// 视频输出格式
         mMediaRecorder.setAudioEncoder(mProfile.audioCodec);// 音频格式
@@ -298,12 +297,13 @@ class Camera1 extends CameraViewImpl {
         mMediaRecorder.setAudioEncodingBitRate(mProfile.audioBitRate);
         mMediaRecorder.setAudioChannels(mProfile.audioChannels);
         mMediaRecorder.setAudioSamplingRate(mProfile.audioSampleRate);
-        mMediaRecorder.setPreviewDisplay(mPreview.getSurface());
+//        mMediaRecorder.setPreviewDisplay(mPreview.getSurface());
         mMediaRecorder.setOrientationHint(calcOrientationHint(degrees));
         try {
             mMediaRecorder.prepare();
-            mCamera.unlock();
+            Log.e("mark", "startRecord: 准备" );
             mMediaRecorder.start();
+            Log.e("mark", "startRecord: 开始" );
         } catch (IllegalStateException e) {
             e.printStackTrace();
         } catch (RuntimeException e) {
@@ -318,8 +318,8 @@ class Camera1 extends CameraViewImpl {
         if (mMediaRecorder != null) {
             mMediaRecorder.setOnErrorListener(null);
             try {
-                mMediaRecorder.stop();
                 mMediaRecorder.reset();
+                mMediaRecorder.stop();
                 mMediaRecorder.release();
             } catch (IllegalStateException e) {
                 e.printStackTrace();
@@ -330,7 +330,6 @@ class Camera1 extends CameraViewImpl {
         mMediaRecorder = null;
     }
 
-    @TimeLog
     void takePictureInternal() {
         Log.e("mark", "takePictureInternal: " + Thread.currentThread().getName());
         mPreview.updatePicturePreviewSizeCenter(degrees);
@@ -389,7 +388,7 @@ class Camera1 extends CameraViewImpl {
         mCameraId = INVALID_CAMERA_ID;
     }
 
-    private void openCamera() {
+    private boolean openCamera() {
         if (mCamera != null) {
             releaseCamera();
         }
@@ -397,7 +396,7 @@ class Camera1 extends CameraViewImpl {
             mCamera = Camera.open(mCameraId);
         } catch (Exception e) {
             Toast.makeText(mPreview.getView().getContext(), "无法连接到照相机，请重启手机", Toast.LENGTH_LONG).show();
-            return;
+            return false;
         }
         mCameraParameters = mCamera.getParameters();
         // Supported preview sizes
@@ -417,6 +416,7 @@ class Camera1 extends CameraViewImpl {
         adjustCameraParameters();
         mCamera.setDisplayOrientation(calcDisplayOrientation(mDisplayOrientation));
         mCallback.onCameraOpened();
+        return true;
     }
 
     private AspectRatio chooseAspectRatio() {

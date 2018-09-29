@@ -17,12 +17,15 @@
 package com.mark.mark_cameraview;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.support.v4.view.ViewCompat;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+
+import java.io.File;
 
 class SurfaceViewPreview extends PreviewImpl {
 
@@ -81,6 +84,26 @@ class SurfaceViewPreview extends PreviewImpl {
     @Override
     boolean isReady() {
         return getWidth() != 0 && getHeight() != 0;
+    }
+
+    @Override
+    void playVideo(File recordFile) {
+
+    }
+
+    @Override
+    void stopVideo() {
+
+    }
+
+    @Override
+    boolean pauseVideo() {
+        return false;
+    }
+
+    @Override
+    boolean resumeVideo() {
+        return false;
     }
 
     @Override

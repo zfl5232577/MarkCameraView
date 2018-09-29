@@ -210,13 +210,14 @@ class Camera2 extends CameraViewImpl {
 
     @Override
     boolean start() {
-        if (!chooseCameraIdByFacing()) {
-            return false;
-        }
-        collectCameraInfo();
-        prepareImageReader();
-        startOpeningCamera();
-        return true;
+        return false;
+//        if (!chooseCameraIdByFacing()) {
+////            return false;
+//        }
+//        collectCameraInfo();
+//        prepareImageReader();
+//        startOpeningCamera();
+//        return true;
     }
 
     @Override

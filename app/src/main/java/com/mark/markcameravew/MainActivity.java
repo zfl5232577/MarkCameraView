@@ -1,6 +1,7 @@
 package com.mark.markcameravew;
 
 import android.Manifest;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Environment;
@@ -11,48 +12,47 @@ import android.os.Bundle;
 import android.view.View;
 
 import com.cjt2325.cameralibrary.JCameraView;
+import com.mark.aoplibrary.annotation.CheckPermission;
+import com.mark.aoplibrary.utils.MPermissionUtils;
 import com.mark.mark_cameraview.RecordVideoView;
 
-public class MainActivity extends AppCompatActivity {
+import io.reactivex.annotations.NonNull;
 
-    private RecordVideoView mRecordVideoView;
-    private JCameraView mJCameraView;
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA,Manifest.permission.RECORD_AUDIO,Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                100);
         setContentView(R.layout.activity_main);
-        ActionBar actionBar = getSupportActionBar();
-        actionBar.hide();
-        if (Build.VERSION.SDK_INT >= 19) {
-            View decorView = getWindow().getDecorView();
-            decorView.setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        } else {
-            View decorView = getWindow().getDecorView();
-            int option = View.SYSTEM_UI_FLAG_FULLSCREEN;
-            decorView.setSystemUiVisibility(option);
+        findViewById(R.id.bt_Photo).setOnClickListener(this);
+        findViewById(R.id.bt_Record).setOnClickListener(this);
+        findViewById(R.id.bt_all).setOnClickListener(this);
+    }
+
+    /**
+     *  @see <a href="https://github.com/zfl5232577/MarkAop">切面框架</a>
+     */
+    @CheckPermission({Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO})
+    @Override
+    public void onClick(View v) {
+        int id = v.getId();
+        Intent intent = new Intent(this, RecordActivity.class);
+        int mode = RecordVideoView.TAKE_PHOTO_RECORD;
+        if (id == R.id.bt_Photo) {
+            mode = RecordVideoView.TAKE_PHOTO;
+        } else if (id == R.id.bt_Record) {
+            mode = RecordVideoView.TAKE_RECORD;
+        } else if (id == R.id.bt_all) {
+            mode = RecordVideoView.TAKE_PHOTO_RECORD;
         }
-        mRecordVideoView = findViewById(R.id.recordVideoView);
-//        mJCameraView = findViewById(R.id.cameraview);
+        intent.putExtra("mode", mode);
+        startActivity(intent);
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        mRecordVideoView.start();
-
-    }
-    @Override
-    protected void onPause() {
-        super.onPause();
-        mRecordVideoView.stop();
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        MPermissionUtils.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 }

@@ -9,24 +9,24 @@ import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.TextureView;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
-
-import com.mark.aoplibrary.annotation.TimeLog;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 import static com.mark.mark_cameraview.CameraView.FACING_BACK;
 
@@ -43,17 +43,21 @@ public class RecordVideoView extends FrameLayout {
 
     private Context mContext;
     private CameraView mCameraView;
+    private ImageView ivShowPicture;
     private CaptureButton mCaptureButton;
     private ImageView ivSwapCamera;
     private RecordVideoListener mRecordVideoListener;
-    private MediaPlayer mediaPlayer;
     private String mRecordFileDir = Constants.TEMP_PATH;
     private String mRecordFilePath;
     private Handler mBackgroundHandler;
     private boolean isBrowse;
-    private boolean isSetWHFinish;
     private byte[] mPictureByte;
     private Bitmap mPictureBitmap;
+
+    private int mMode;
+    public static final int TAKE_PHOTO = 1;
+    public static final int TAKE_RECORD = 2;
+    public static final int TAKE_PHOTO_RECORD = 3;
 
 
     public RecordVideoView(@NonNull Context context) {
@@ -72,6 +76,7 @@ public class RecordVideoView extends FrameLayout {
         mCameraView = findViewById(R.id.cameraView);
         mCaptureButton = findViewById(R.id.captureButton);
         ivSwapCamera = findViewById(R.id.swap_camera);
+        ivShowPicture = findViewById(R.id.iv_ShowPicture);
         mCameraView.addCallback(mCallback);
         mCaptureButton.setCaptureListener(mCaptureListener);
         ivSwapCamera.setOnClickListener(new OnClickListener() {
@@ -147,61 +152,7 @@ public class RecordVideoView extends FrameLayout {
     };
 
     private void browseRecord(File file) {
-        if (!file.exists()) {
-            Toast.makeText(getContext(), "视频文件路径错误", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        try {
-            if (mediaPlayer == null) {
-                mediaPlayer = new MediaPlayer();
-            }
-            mediaPlayer.reset();
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            // 设置播放的视频源
-            mediaPlayer.setDataSource(file.getAbsolutePath());
-            mediaPlayer.prepareAsync();
-            // 设置显示视频的SurfaceHolder
-            mediaPlayer.setSurface(mCameraView.getPreview().getSurface());
-            mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-
-                @Override
-                public void onPrepared(MediaPlayer mp) {
-                    if (mediaPlayer != null) {
-                        mediaPlayer.start();
-                        // 按照初始位置播放
-                        mediaPlayer.seekTo(0);
-                    }
-                }
-            });
-            mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-
-                @Override
-                public void onCompletion(MediaPlayer mp) {
-                    if (mediaPlayer != null) {
-                        // 在播放完毕被回调
-                        mediaPlayer.seekTo(0);
-                        mediaPlayer.start();
-                    }
-                }
-            });
-            mediaPlayer.setOnVideoSizeChangedListener(new MediaPlayer.OnVideoSizeChangedListener() {
-                @Override
-                public void onVideoSizeChanged(MediaPlayer mp, final int width, final int height) {
-                    if (isSetWHFinish) {
-                        return;
-                    }
-                    isSetWHFinish = true;
-                    postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            mCameraView.getPreview().updateVideoPreviewSizeCenter(width, height);
-                        }
-                    },200);
-                }
-            });
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        mCameraView.getPreview().playVideo(file);
     }
 
     private CaptureButton.CaptureListener mCaptureListener = new CaptureButton.CaptureListener() {
@@ -224,6 +175,9 @@ public class RecordVideoView extends FrameLayout {
         @Override
         public void cancel() {
             isBrowse = false;
+            if (ivShowPicture.isShown()){
+                ivShowPicture.setVisibility(GONE);
+            }
             ivSwapCamera.setVisibility(VISIBLE);
             mCameraView.start();
             mPictureByte = null;
@@ -266,7 +220,8 @@ public class RecordVideoView extends FrameLayout {
         }
 
         @Override
-        public void rencodEnd() {
+        public void rencordEnd() {
+            Log.e("mark", "rencordEnd: ");
             mCameraView.stopRecord();
             mCameraView.stop();
             isBrowse = true;
@@ -280,6 +235,16 @@ public class RecordVideoView extends FrameLayout {
         }
 
         @Override
+        public void rencordFail() {
+            getBackgroundHandler().post(new Runnable() {
+                @Override
+                public void run() {
+                    mCameraView.stopRecord();
+                }
+            });
+        }
+
+        @Override
         public void getRecordResult() {
             if (mRecordVideoListener != null) {
                 mRecordVideoListener.onRecordTaken(new File(mRecordFilePath));
@@ -288,12 +253,7 @@ public class RecordVideoView extends FrameLayout {
 
         @Override
         public void deleteRecordResult() {
-            if (mediaPlayer != null) {
-                isSetWHFinish = false;
-                mediaPlayer.stop();
-                mediaPlayer.reset();
-                cleanDraw();
-            }
+            mCameraView.getPreview().stopVideo();
             mCameraView.start();
             isBrowse = false;
             ivSwapCamera.setVisibility(VISIBLE);
@@ -357,21 +317,22 @@ public class RecordVideoView extends FrameLayout {
     }
 
     public void start() {
+        Log.e("mark", "start: ");
         if (isBrowse) {
-            if (mediaPlayer != null) {
-                mediaPlayer.start();
+            if (mPictureBitmap != null && !mCameraView.getPreview().isReady()) {
+                ivShowPicture.setImageBitmap(mPictureBitmap);
+                ivShowPicture.setVisibility(VISIBLE);
+            } else {
+                mCameraView.getPreview().resumeVideo();
             }
             return;
         }
-        isSetWHFinish = false;
         mCameraView.start();
     }
 
     public void stop() {
         if (isBrowse) {
-            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-                mediaPlayer.pause();
-            }
+            mCameraView.getPreview().pauseVideo();
             return;
         }
         mCameraView.stop();
@@ -383,7 +344,6 @@ public class RecordVideoView extends FrameLayout {
             mPictureBitmap.recycle();
             mPictureBitmap = null;
         }
-        releaseMediaPlayer();
         if (mBackgroundHandler != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
                 mBackgroundHandler.getLooper().quitSafely();
@@ -394,21 +354,86 @@ public class RecordVideoView extends FrameLayout {
         }
     }
 
-    private void releaseMediaPlayer() {
-        if (mediaPlayer != null) {
-            mediaPlayer.stop();
-            mediaPlayer.reset();
-            mediaPlayer.setDisplay(null);
-            mediaPlayer.release();
-            mediaPlayer = null;
-        }
+    @Mode
+    public int getMode() {
+        return mMode;
     }
 
-    private void cleanDraw() {
-//        Canvas canvas = ((TextureView)mCameraView.getPreview().getView()).lockCanvas();
-//        canvas.drawColor(Color.BLACK);
-//        ((TextureView)mCameraView.getPreview().getView()).unlockCanvasAndPost(canvas);
+    public void setMode(@Mode int mode) {
+        mMode = mode;
+        mCaptureButton.setMode(mode);
     }
+
+    @IntDef({TAKE_PHOTO, TAKE_RECORD, TAKE_PHOTO_RECORD})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface Mode {
+    }
+
+    public void setFacing(@CameraView.Facing int facing) {
+        mCameraView.setFacing(facing);
+    }
+
+    /**
+     * Gets the direction that the current camera faces.
+     *
+     * @return The camera facing.
+     */
+    @CameraView.Facing
+    public int getFacing() {
+        //noinspection WrongConstant
+        return mCameraView.getFacing();
+    }
+
+
+    /**
+     * Sets the aspect ratio of camera.
+     *
+     * @param ratio The {@link AspectRatio} to be set.
+     */
+    public void setAspectRatio(@NonNull AspectRatio ratio) {
+        mCameraView.setAspectRatio(ratio);
+    }
+
+    /**
+     * Gets the current aspect ratio of camera.
+     *
+     * @return The current {@link AspectRatio}. Can be {@code null} if no camera is opened yet.
+     */
+    @Nullable
+    public AspectRatio getAspectRatio() {
+        return mCameraView.getAspectRatio();
+    }
+
+    /**
+     * Enables or disables the continuous auto-focus mode. When the current camera doesn't support
+     * auto-focus, calling this method will be ignored.
+     *
+     * @param autoFocus {@code true} to enable continuous auto-focus mode. {@code false} to
+     *                  disable it.
+     */
+    public void setAutoFocus(boolean autoFocus) {
+        mCameraView.setAutoFocus(autoFocus);
+    }
+
+    /**
+     * Returns whether the continuous auto-focus mode is enabled.
+     *
+     * @return {@code true} if the continuous auto-focus mode is enabled. {@code false} if it is
+     * disabled, or if it is not supported by the current camera.
+     */
+    public boolean getAutoFocus() {
+        return mCameraView.getAutoFocus();
+    }
+
+    /**
+     * Sets the flash mode.
+     *
+     * @param flash The desired flash mode.
+     */
+    public void setFlash(@CameraView.Flash int flash) {
+        mCameraView.setFlash(flash);
+    }
+
 
     private File createRecordDir() {
         File sampleDir = new File(mRecordFileDir);
@@ -438,10 +463,10 @@ public class RecordVideoView extends FrameLayout {
         // 创建文件
         File file;
         try {
-            file = File.createTempFile("picture", ".png", sampleDir);
+            file = File.createTempFile("picture", ".jpg", sampleDir);
         } catch (IOException e) {
             e.printStackTrace();
-            file = new File(mRecordFileDir, "picture" + System.currentTimeMillis() + ".png");
+            file = new File(mRecordFileDir, "picture" + System.currentTimeMillis() + ".jpg");
             if (!file.exists()) {
                 file.mkdirs();
             }

@@ -18,13 +18,19 @@ package com.mark.mark_cameraview;
 
 import android.annotation.TargetApi;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
+
+import java.io.File;
 
 @TargetApi(14)
 class TextureViewPreview extends PreviewImpl {
@@ -33,6 +39,10 @@ class TextureViewPreview extends PreviewImpl {
 
     private int mDisplayOrientation;
     private Surface mSurface;
+    private MediaPlayer mediaPlayer;
+    private boolean isSetWHFinish;
+    private int mCurrentPosition;
+    private File mRecordFile;
 
     TextureViewPreview(Context context, ViewGroup parent) {
         final View view = View.inflate(context, R.layout.texture_view, parent);
@@ -42,15 +52,18 @@ class TextureViewPreview extends PreviewImpl {
 
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-                Log.e("mark", "onSurfaceTextureAvailable: " +width+height);
+                Log.e("mark", "onSurfaceTextureAvailable: " + width + height);
                 setSize(width, height);
                 configureTransform();
                 dispatchSurfaceChanged();
+                if (mRecordFile!=null){
+                    playVideo(mRecordFile);
+                }
             }
 
             @Override
             public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-                Log.e("mark", "onSurfaceTextureSizeChanged: " +width+height);
+                Log.e("mark", "onSurfaceTextureSizeChanged: " + width + height);
                 setSize(width, height);
                 configureTransform();
                 dispatchSurfaceChanged();
@@ -58,8 +71,17 @@ class TextureViewPreview extends PreviewImpl {
 
             @Override
             public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-                Log.e("mark", "onSurfaceTextureDestroyed: " );
+                Log.e("mark", "onSurfaceTextureDestroyed: ");
                 setSize(0, 0);
+                if (mediaPlayer != null) {
+                    mCurrentPosition = mediaPlayer.getCurrentPosition();
+                    isSetWHFinish = false;
+                    if (mediaPlayer.isPlaying()) {
+                        mediaPlayer.stop();
+                    }
+                    mediaPlayer.release();
+                    mediaPlayer = null;
+                }
                 return true;
             }
 
@@ -78,10 +100,7 @@ class TextureViewPreview extends PreviewImpl {
 
     @Override
     Surface getSurface() {
-        if (mSurface==null){
-            mSurface = new Surface(mTextureView.getSurfaceTexture());
-        }
-        return mSurface;
+        return new Surface(mTextureView.getSurfaceTexture());
     }
 
     @Override
@@ -111,6 +130,96 @@ class TextureViewPreview extends PreviewImpl {
     }
 
     @Override
+    void playVideo(File recordFile) {
+        if (!recordFile.exists()) {
+            return;
+        }
+        mRecordFile = recordFile;
+        try {
+            if (mediaPlayer == null) {
+                mediaPlayer = new MediaPlayer();
+            }
+            mediaPlayer.reset();
+            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            // 设置播放的视频源
+            mediaPlayer.setDataSource(recordFile.getAbsolutePath());
+            mediaPlayer.prepareAsync();
+            // 设置显示视频的SurfaceHolder
+            mediaPlayer.setSurface(getSurface());
+            mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+
+                @Override
+                public void onPrepared(MediaPlayer mp) {
+                    if (mediaPlayer != null) {
+                        mediaPlayer.start();
+                        // 按照初始位置播放
+                        mediaPlayer.seekTo(mCurrentPosition);
+                    }
+                }
+            });
+            mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+
+                @Override
+                public void onCompletion(MediaPlayer mp) {
+                    if (mediaPlayer != null) {
+                        // 在播放完毕被回调
+                        mediaPlayer.seekTo(0);
+                        mediaPlayer.start();
+                    }
+                }
+            });
+            mediaPlayer.setOnVideoSizeChangedListener(new MediaPlayer.OnVideoSizeChangedListener() {
+                @Override
+                public void onVideoSizeChanged(MediaPlayer mp, final int width, final int height) {
+                    if (isSetWHFinish) {
+                        return;
+                    }
+                    isSetWHFinish = true;
+                    mTextureView.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            updateVideoPreviewSizeCenter(width, height);
+                        }
+                    }, 200);
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    void stopVideo() {
+        if (mediaPlayer != null) {
+            mRecordFile = null;
+            mCurrentPosition = 0;
+            isSetWHFinish = false;
+            mediaPlayer.reset();
+            mediaPlayer.stop();
+        }
+    }
+
+    @Override
+    boolean pauseVideo() {
+        if (mediaPlayer != null) {
+            mediaPlayer.pause();
+            return true;
+        }
+        //TextureView.onSurfaceTextureDestroyed息屏后被调用。mediaPlayer被回收需要返回false
+        return false;
+    }
+
+    @Override
+    boolean resumeVideo() {
+        if (mediaPlayer != null) {
+            mediaPlayer.start();
+            return true;
+        }
+        //TextureView.onSurfaceTextureDestroyed息屏后被调用。mediaPlayer被回收需要返回false
+        return false;
+    }
+
+    @Override
     void updateVideoPreviewSizeCenter(int width, int height) {
         float sx = (float) getWidth() / (float) width;
         float sy = (float) getHeight() / (float) height;
@@ -136,14 +245,14 @@ class TextureViewPreview extends PreviewImpl {
 
     @Override
     void updatePicturePreviewSizeCenter(int degrees) {
-        if (degrees==0){
+        if (degrees == 0) {
             return;
         }
         Matrix matrix = new Matrix();
         matrix.postRotate(degrees, getWidth() / 2, getHeight() / 2);
         if (degrees == 90 || degrees == 270) {
             float s = (float) getWidth() / (float) getHeight();
-            matrix.postScale(s,s,getWidth() / 2,  getHeight() / 2);
+            matrix.postScale(s, s, getWidth() / 2, getHeight() / 2);
         }
         mTextureView.setTransform(matrix);
         mTextureView.postInvalidate();
