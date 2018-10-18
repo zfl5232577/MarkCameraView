@@ -17,6 +17,7 @@
 package com.mark.mark_cameraview;
 
 import android.content.Context;
+import android.util.Log;
 import android.view.OrientationEventListener;
 import android.view.View;
 
@@ -29,7 +30,7 @@ abstract class CameraViewImpl {
 
     protected final PreviewImpl mPreview;
     protected int degrees;
-    protected boolean isStart;
+    protected boolean isStartRecord;
     protected final MyOrientationDetector mOrientationDetector;
 
     CameraViewImpl(Callback callback, PreviewImpl preview) {
@@ -102,7 +103,7 @@ abstract class CameraViewImpl {
 
         @Override
         public void onOrientationChanged(int orientation) {
-            if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN || isStart) {
+            if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN || isStartRecord) {
                 return;  //手机平放时，检测不到有效的角度
             }
             //只检测是否有四个角度的改变

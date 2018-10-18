@@ -3,6 +3,7 @@ package com.mark.mark_cameraview;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.hardware.Camera;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -49,7 +50,7 @@ public class RecordVideoView extends FrameLayout {
     private RecordVideoListener mRecordVideoListener;
     private String mRecordFileDir = Constants.TEMP_PATH;
     private String mRecordFilePath;
-    private Handler mBackgroundHandler;
+    private static Handler mBackgroundHandler;
     private boolean isBrowse;
     private byte[] mPictureByte;
     private Bitmap mPictureBitmap;
@@ -117,7 +118,7 @@ public class RecordVideoView extends FrameLayout {
         return mCameraView;
     }
 
-    private Handler getBackgroundHandler() {
+    public static Handler getBackgroundHandler() {
         if (mBackgroundHandler == null) {
             HandlerThread thread = new HandlerThread("background", 1000);
             thread.start();
@@ -163,11 +164,9 @@ public class RecordVideoView extends FrameLayout {
             getBackgroundHandler().postAtFrontOfQueue(new Runnable() {
                 @Override
                 public void run() {
-                    Log.e("mark", "run:start ");
                     mCameraView.takePicture();
                     deleteFile();
                     getBackgroundHandler().removeCallbacksAndMessages(null);
-                    Log.e("mark", "run:end ");
                 }
             });
         }
@@ -175,21 +174,26 @@ public class RecordVideoView extends FrameLayout {
         @Override
         public void cancel() {
             isBrowse = false;
-            if (ivShowPicture.isShown()){
-                ivShowPicture.setVisibility(GONE);
+            if (ivShowPicture.isShown()) {
+                postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        ivShowPicture.setVisibility(GONE);
+                    }
+                }, 400);
             }
             ivSwapCamera.setVisibility(VISIBLE);
-            mCameraView.start();
             mPictureByte = null;
             if (mPictureBitmap != null) {
                 mPictureBitmap.recycle();
                 mPictureBitmap = null;
             }
-//            getBackgroundHandler().post(new Runnable() {
-//                @Override
-//                public void run() {
-//                }
-//            });
+            getBackgroundHandler().post(new Runnable() {
+                @Override
+                public void run() {
+                    mCameraView.start();
+                }
+            });
         }
 
         @Override
@@ -211,24 +215,33 @@ public class RecordVideoView extends FrameLayout {
 
         @Override
         public void record() {
-            getBackgroundHandler().postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    mCameraView.startRecord(createRecordDir());
-                }
-            }, 200);
+            ivSwapCamera.setVisibility(GONE);
+            if (Build.VERSION.SDK_INT < 21) {
+                getBackgroundHandler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        mCameraView.startRecord(createRecordDir());
+                    }
+                }, 200);
+            } else {
+                getBackgroundHandler().post(new Runnable() {
+                    @Override
+                    public void run() {
+                        mCameraView.startRecord(createRecordDir());
+                    }
+                });
+            }
         }
 
         @Override
         public void rencordEnd() {
-            Log.e("mark", "rencordEnd: ");
-            mCameraView.stopRecord();
-            mCameraView.stop();
-            isBrowse = true;
             ivSwapCamera.setVisibility(GONE);
+            isBrowse = true;
             getBackgroundHandler().post(new Runnable() {
                 @Override
                 public void run() {
+                    mCameraView.stopRecord();
+                    mCameraView.stop();
                     browseRecord(new File(mRecordFilePath));
                 }
             });
@@ -240,6 +253,7 @@ public class RecordVideoView extends FrameLayout {
                 @Override
                 public void run() {
                     mCameraView.stopRecord();
+                    getBackgroundHandler().removeCallbacksAndMessages(null);
                 }
             });
         }
@@ -254,12 +268,12 @@ public class RecordVideoView extends FrameLayout {
         @Override
         public void deleteRecordResult() {
             mCameraView.getPreview().stopVideo();
-            mCameraView.start();
             isBrowse = false;
             ivSwapCamera.setVisibility(VISIBLE);
             getBackgroundHandler().post(new Runnable() {
                 @Override
                 public void run() {
+                    mCameraView.start();
                     deleteFile();
                 }
             });
@@ -317,7 +331,6 @@ public class RecordVideoView extends FrameLayout {
     }
 
     public void start() {
-        Log.e("mark", "start: ");
         if (isBrowse) {
             if (mPictureBitmap != null && !mCameraView.getPreview().isReady()) {
                 ivShowPicture.setImageBitmap(mPictureBitmap);

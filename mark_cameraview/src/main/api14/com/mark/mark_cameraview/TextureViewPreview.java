@@ -35,10 +35,10 @@ import java.io.File;
 @TargetApi(14)
 class TextureViewPreview extends PreviewImpl {
 
+    private static final String TAG = TextureViewPreview.class.getSimpleName();
     private final TextureView mTextureView;
 
     private int mDisplayOrientation;
-    private Surface mSurface;
     private MediaPlayer mediaPlayer;
     private boolean isSetWHFinish;
     private int mCurrentPosition;
@@ -52,7 +52,7 @@ class TextureViewPreview extends PreviewImpl {
 
             @Override
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-                Log.e("mark", "onSurfaceTextureAvailable: " + width + height);
+                Log.e(TAG, "onSurfaceTextureAvailable: "+width+height );
                 setSize(width, height);
                 configureTransform();
                 dispatchSurfaceChanged();
@@ -63,7 +63,7 @@ class TextureViewPreview extends PreviewImpl {
 
             @Override
             public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-                Log.e("mark", "onSurfaceTextureSizeChanged: " + width + height);
+                Log.e(TAG, "onSurfaceTextureSizeChanged: "+width+height );
                 setSize(width, height);
                 configureTransform();
                 dispatchSurfaceChanged();
@@ -71,8 +71,9 @@ class TextureViewPreview extends PreviewImpl {
 
             @Override
             public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-                Log.e("mark", "onSurfaceTextureDestroyed: ");
+                Log.e(TAG, "onSurfaceTextureDestroyed: ");
                 setSize(0, 0);
+                isSetWHFinish = false;
                 if (mediaPlayer != null) {
                     mCurrentPosition = mediaPlayer.getCurrentPosition();
                     isSetWHFinish = false;
@@ -171,10 +172,10 @@ class TextureViewPreview extends PreviewImpl {
             mediaPlayer.setOnVideoSizeChangedListener(new MediaPlayer.OnVideoSizeChangedListener() {
                 @Override
                 public void onVideoSizeChanged(MediaPlayer mp, final int width, final int height) {
-                    if (isSetWHFinish) {
+                    Log.e(TAG, "onVideoSizeChanged: "+ width+height);
+                    if (width==getWidth()&& height==getHeight() || isSetWHFinish) {
                         return;
                     }
-                    isSetWHFinish = true;
                     mTextureView.postDelayed(new Runnable() {
                         @Override
                         public void run() {
@@ -193,7 +194,6 @@ class TextureViewPreview extends PreviewImpl {
         if (mediaPlayer != null) {
             mRecordFile = null;
             mCurrentPosition = 0;
-            isSetWHFinish = false;
             mediaPlayer.reset();
             mediaPlayer.stop();
         }
@@ -221,9 +221,15 @@ class TextureViewPreview extends PreviewImpl {
 
     @Override
     void updateVideoPreviewSizeCenter(int width, int height) {
+        Log.e(TAG, "updateVideoPreviewSizeCenter: width"+width+height );
+        Log.e(TAG, "updateVideoPreviewSizeCenter: getWidth()"+getWidth()+getHeight() );
         float sx = (float) getWidth() / (float) width;
         float sy = (float) getHeight() / (float) height;
-
+        if (sx==1 && sy==1){
+            isSetWHFinish =false;
+        }else {
+            isSetWHFinish =true;
+        }
         Matrix matrix = new Matrix();
 
         //第1步:把视频区移动到View区,使两者中心点重合.
@@ -248,6 +254,7 @@ class TextureViewPreview extends PreviewImpl {
         if (degrees == 0) {
             return;
         }
+        isSetWHFinish = true;
         Matrix matrix = new Matrix();
         matrix.postRotate(degrees, getWidth() / 2, getHeight() / 2);
         if (degrees == 90 || degrees == 270) {
@@ -256,6 +263,10 @@ class TextureViewPreview extends PreviewImpl {
         }
         mTextureView.setTransform(matrix);
         mTextureView.postInvalidate();
+    }
+
+    public boolean isSetWHFinish() {
+        return isSetWHFinish;
     }
 
     /**

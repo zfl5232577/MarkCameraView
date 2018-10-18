@@ -95,11 +95,10 @@ class Camera1 extends CameraViewImpl {
 
     @Override
     boolean start() {
-        isStart = false;
         degrees = 0;
         mOrientationDetector.enable();
         chooseCamera();
-        if (!openCamera()){
+        if (!openCamera()) {
             return false;
         }
         if (mPreview.isReady()) {
@@ -259,11 +258,10 @@ class Camera1 extends CameraViewImpl {
 
     @Override
     void startRecord(File recordFile) {
-        Log.e("mark", "startRecord: 开始录制");
         if (!isCameraOpened()) {
             return;
         }
-        isStart = true;
+        isStartRecord = true;
         mCamera.unlock();
         if (mMediaRecorder == null) {
             mMediaRecorder = new MediaRecorder();
@@ -301,9 +299,7 @@ class Camera1 extends CameraViewImpl {
         mMediaRecorder.setOrientationHint(calcOrientationHint(degrees));
         try {
             mMediaRecorder.prepare();
-            Log.e("mark", "startRecord: 准备" );
             mMediaRecorder.start();
-            Log.e("mark", "startRecord: 开始" );
         } catch (IllegalStateException e) {
             e.printStackTrace();
         } catch (RuntimeException e) {
@@ -315,11 +311,12 @@ class Camera1 extends CameraViewImpl {
 
     @Override
     void stopRecord() {
+        isStartRecord = false;
         if (mMediaRecorder != null) {
             mMediaRecorder.setOnErrorListener(null);
             try {
-                mMediaRecorder.reset();
                 mMediaRecorder.stop();
+                mMediaRecorder.reset();
                 mMediaRecorder.release();
             } catch (IllegalStateException e) {
                 e.printStackTrace();
@@ -331,7 +328,6 @@ class Camera1 extends CameraViewImpl {
     }
 
     void takePictureInternal() {
-        Log.e("mark", "takePictureInternal: " + Thread.currentThread().getName());
         mPreview.updatePicturePreviewSizeCenter(degrees);
         stop();
         Bitmap bitmap = ((TextureView) mPreview.getView()).getBitmap();
@@ -415,7 +411,12 @@ class Camera1 extends CameraViewImpl {
         }
         adjustCameraParameters();
         mCamera.setDisplayOrientation(calcDisplayOrientation(mDisplayOrientation));
-        mCallback.onCameraOpened();
+        mPreview.getView().post(new Runnable() {
+            @Override
+            public void run() {
+                mCallback.onCameraOpened();
+            }
+        });
         return true;
     }
 
@@ -531,10 +532,8 @@ class Camera1 extends CameraViewImpl {
 
     private int calcOrientationHint(int degrees) {
         if (mCameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
-            Log.e("mark", "calcOrientationHint: " + calcDisplayOrientation(mDisplayOrientation));
             return (360 - calcDisplayOrientation(mDisplayOrientation) - degrees + 360) % 360;
         } else {  // back-facing
-            Log.e("mark", "calcOrientationHint: " + calcDisplayOrientation(mDisplayOrientation));
             return (calcDisplayOrientation(mDisplayOrientation) + degrees) % 360;
         }
     }
